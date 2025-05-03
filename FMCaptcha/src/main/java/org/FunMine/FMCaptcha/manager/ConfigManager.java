@@ -28,6 +28,8 @@ public class ConfigManager {
     private final int delaySeconds;
     private final int reminderInterval;
     private final boolean freezeMovement;
+    private final boolean blockCommands;
+    private final boolean blockChat;
 
     private final Map<String, SoundConfig> soundConfigs = new HashMap<>();
 
@@ -48,7 +50,6 @@ public class ConfigManager {
         this.config = plugin.getConfig();
         plugin.saveDefaultConfig();
 
-        // Load all configuration values once
         this.capchaPairs = loadCapchaPairs();
         this.trapWords = new HashSet<>(capchaPairs.keySet());
         this.pendingEffects = loadPendingEffects();
@@ -68,6 +69,8 @@ public class ConfigManager {
         this.reminderInterval = config.getInt("settings.reminder-interval", 10);
 
         this.freezeMovement = config.getBoolean("restrictions.freeze-movement", true);
+        this.blockCommands = config.getBoolean("restrictions.block-commands", true);
+        this.blockChat = config.getBoolean("restrictions.block-chat", true);
 
         loadSoundConfigs();
     }
@@ -233,9 +236,11 @@ public class ConfigManager {
         return reminderInterval;
     }
 
-    public boolean isFreezeMovement() {
-        return freezeMovement;
-    }
+    public boolean isFreezeMovement() {return freezeMovement;}
+
+    public boolean isBlockCommands() {return blockCommands;}
+
+    public boolean isBlockChat() {return blockChat;}
 
     private String convertColorFormat(String colorCode) {
         return colorCode.replace('&', '§');
