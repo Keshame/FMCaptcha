@@ -48,6 +48,7 @@ public class ConfigManager {
         this.config = plugin.getConfig();
         plugin.saveDefaultConfig();
 
+        // Load all configuration values once
         this.capchaPairs = loadCapchaPairs();
         this.trapWords = new HashSet<>(capchaPairs.keySet());
         this.pendingEffects = loadPendingEffects();
@@ -175,27 +176,27 @@ public class ConfigManager {
     }
 
     public String getCapchaTitle() {
-        return config.getString("titles.capcha-title", "").replace('&', '§');
+        return config.getString("messages.capcha-title", "").replace('&', '§');
     }
 
     public String getCapchaSubtitle() {
-        return config.getString("titles.capcha-subtitle", "").replace('&', '§');
+        return config.getString("messages.capcha-subtitle", "").replace('&', '§');
     }
 
     public String getCapchaSuccessTitle() {
-        return config.getString("titles.capcha-success-title", "").replace('&', '§');
+        return config.getString("messages.capcha-success-title", "").replace('&', '§');
     }
 
     public String getCapchaSuccessSubtitle() {
-        return config.getString("titles.capcha-success-subtitle", "").replace('&', '§');
+        return config.getString("messages.capcha-success-subtitle", "").replace('&', '§');
     }
 
     public String getCapchaFailTitle() {
-        return config.getString("titles.capcha-fail-title", "").replace('&', '§');
+        return config.getString("messages.capcha-fail-title", "").replace('&', '§');
     }
 
     public String getCapchaFailSubtitle() {
-        return config.getString("titles.capcha-fail-subtitle", "").replace('&', '§');
+        return config.getString("messages.capcha-fail-subtitle", "").replace('&', '§');
     }
 
     public List<String> getSuccessCommands() {
