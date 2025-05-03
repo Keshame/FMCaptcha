@@ -48,7 +48,6 @@ public class ConfigManager {
         this.config = plugin.getConfig();
         plugin.saveDefaultConfig();
 
-        // Load all configuration values once
         this.capchaPairs = loadCapchaPairs();
         this.trapWords = new HashSet<>(capchaPairs.keySet());
         this.pendingEffects = loadPendingEffects();
