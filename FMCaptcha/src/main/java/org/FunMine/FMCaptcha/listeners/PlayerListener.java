@@ -1,103 +1,251 @@
-package org.FunMine.FMCaptcha.listeners;
+package org.FunMine.FMCaptcha.manager;
 
-import org.FunMine.FMCaptcha.manager.CaptchaManager;
-import org.FunMine.FMCaptcha.manager.ConfigManager;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
-import org.bukkit.event.EventHandler;
-import org.bukkit.event.EventPriority;
-import org.bukkit.event.Listener;
-import org.bukkit.event.player.*;
 import org.bukkit.plugin.java.JavaPlugin;
+import org.bukkit.scheduler.BukkitTask;
 
-import java.util.UUID;
+import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
-public class PlayerListener implements Listener {
+public class CaptchaManager {
     private final JavaPlugin plugin;
-    private final CaptchaManager captchaManager;
-    private final boolean freezeMovement;
-    private final boolean blockCommands;
-    private final boolean blockChat;
+    private final ConfigManager configManager;
+    private final DatabaseManager databaseManager;
 
-    public PlayerListener(JavaPlugin plugin, CaptchaManager captchaManager) {
+    private final Map<UUID, String> pendingPlayers = new ConcurrentHashMap<>();
+    private final Map<UUID, Integer> attemptsLeft = new ConcurrentHashMap<>();
+    private final Map<UUID, BukkitTask> timeoutTasks = new ConcurrentHashMap<>();
+    private final Map<UUID, BukkitTask> reminderTasks = new ConcurrentHashMap<>();
+    private final Map<UUID, String> playerColors = new ConcurrentHashMap<>();
+    private final Map<UUID, String> playerUnicodes = new ConcurrentHashMap<>();
+    private final Map<UUID, Long> captchaStartTimes = new ConcurrentHashMap<>();
+
+    public CaptchaManager(JavaPlugin plugin, ConfigManager configManager, DatabaseManager databaseManager) {
         this.plugin = plugin;
-        this.captchaManager = captchaManager;
-        ConfigManager config = captchaManager.getConfig();
-        this.freezeMovement = config.isFreezeMovement();
-        this.blockCommands = config.isBlockCommands();
-        this.blockChat = config.isBlockChat();
+        this.configManager = configManager;
+        this.databaseManager = databaseManager;
     }
 
-    @EventHandler
-    public void onPlayerJoin(PlayerJoinEvent event) {
-        Player player = event.getPlayer();
-        Bukkit.getScheduler().runTaskLater(plugin, () -> {
-            if (player.isOnline()) {
-                captchaManager.startCapchaCheck(player);
+    public void startCapchaCheck(Player player) {
+        UUID playerId = player.getUniqueId();
+        cleanupPlayer(playerId);
+
+        if (!databaseManager.shouldCheckPlayer(playerId)) {
+            executeSuccessCommands(player);
+            return;
+        }
+
+        String color = configManager.getRandomColor();
+        String unicode = configManager.getRandomUnicode();
+
+        playerColors.put(playerId, color);
+        playerUnicodes.put(playerId, unicode);
+
+        Map.Entry<String, String> capchaEntry = configManager.getRandomCapchaPair();
+        String randomKey = capchaEntry.getKey();
+        String correctAnswer = capchaEntry.getValue();
+
+        pendingPlayers.put(playerId, correctAnswer);
+        attemptsLeft.put(playerId, configManager.getAttempts());
+        captchaStartTimes.put(playerId, System.currentTimeMillis());
+
+        applyPendingEffects(player);
+        sendCapchaMessages(player, randomKey);
+        setupTimeout(player);
+    }
+
+    private void sendCapchaMessages(Player player, String capchaText) {
+        UUID playerId = player.getUniqueId();
+        String color = playerColors.get(playerId);
+        String unicode = playerUnicodes.get(playerId);
+
+        String message = configManager.getCapchaPromptMessage(capchaText, color, unicode);
+        player.sendMessage(message);
+
+        if (configManager.isTitlesEnabled()) {
+            player.sendTitle(
+                    configManager.getCapchaTitle(),
+                    configManager.getCapchaSubtitle(),
+                    configManager.getTitleFadeIn(),
+                    configManager.getTitleStay(),
+                    configManager.getTitleFadeOut()
+            );
+        }
+
+        playSound(player, "on-start");
+
+        if (configManager.getReminderInterval() > 0) {
+            startReminderTask(player, capchaText);
+        }
+    }
+
+    private void startReminderTask(Player player, String capchaText) {
+        UUID playerId = player.getUniqueId();
+        String color = playerColors.get(playerId);
+        String unicode = playerUnicodes.get(playerId);
+
+        if (reminderTasks.containsKey(playerId)) {
+            reminderTasks.get(playerId).cancel();
+        }
+
+        int interval = configManager.getReminderInterval() * 20;
+        BukkitTask task = Bukkit.getScheduler().runTaskTimer(plugin, () -> {
+            if (pendingPlayers.containsKey(playerId)) {
+                String reminder = configManager.getCapchaReminderMessage(capchaText, color, unicode);
+                player.sendMessage(reminder);
+                playSound(player, "on-reminder");
             }
-        }, 10L);
+        }, interval, interval);
+
+        reminderTasks.put(playerId, task);
     }
 
-    @EventHandler
-    public void onPlayerMove(PlayerMoveEvent event) {
-        if (!freezeMovement) return;
-
-        Player player = event.getPlayer();
+    private void handleCapchaSuccess(Player player) {
         UUID playerId = player.getUniqueId();
+        cleanupPlayer(playerId);
+        databaseManager.savePlayerResult(playerId, true);
 
-        if (captchaManager.isPending(playerId) &&
-                (event.getFrom().getX() != event.getTo().getX() ||
-                        event.getFrom().getZ() != event.getTo().getZ())) {
-            event.setTo(event.getFrom());
+        player.getActivePotionEffects().forEach(effect -> player.removePotionEffect(effect.getType()));
+
+        player.sendMessage(configManager.getCapchaSuccessMessage());
+        if (configManager.isTitlesEnabled()) {
+            player.sendTitle(
+                    configManager.getCapchaSuccessTitle(),
+                    configManager.getCapchaSuccessSubtitle(),
+                    configManager.getTitleFadeIn(),
+                    configManager.getTitleStay(),
+                    configManager.getTitleFadeOut()
+            );
+        }
+
+        playSound(player, "on-success");
+        executeSuccessCommands(player);
+    }
+
+    private void executeSuccessCommands(Player player) {
+        configManager.getSuccessCommands().stream()
+                .filter(command -> command != null && !command.trim().isEmpty())
+                .forEach(command ->
+                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command.replace("$player", player.getName()))
+                );
+    }
+
+    private void applyPendingEffects(Player player) {
+        configManager.getPendingEffects().forEach(effect -> player.addPotionEffect(effect, true));
+    }
+
+    public boolean checkCapcha(Player player, String input) {
+        UUID playerId = player.getUniqueId();
+        if (!pendingPlayers.containsKey(playerId)) return false;
+
+        Long startTime = captchaStartTimes.get(playerId);
+        if (startTime != null && System.currentTimeMillis() - startTime < 1200) {
+            handleCapchaFail(player, true);
+            return false;
+        }
+
+        String correctAnswer = pendingPlayers.get(playerId);
+
+        if (input.equalsIgnoreCase(correctAnswer)) {
+            handleCapchaSuccess(player);
+            return true;
+        }
+        else if (configManager.isTrapWord(input)) {
+            handleCapchaFail(player, true);
+            return false;
+        } else {
+            handleCapchaFail(player, false);
+            return false;
         }
     }
 
-    @EventHandler(priority = EventPriority.LOW)
-    public void onPlayerCommand(PlayerCommandPreprocessEvent event) {
-        if (!blockCommands) return;
-
-        Player player = event.getPlayer();
-        if (captchaManager.isPending(player.getUniqueId())) {
-            event.setCancelled(true);
-        }
-    }
-
-    @EventHandler(priority = EventPriority.LOWEST)
-    public void onPlayerChat(AsyncPlayerChatEvent event) {
-        Player player = event.getPlayer();
+    private void handleCapchaFail(Player player, boolean isTrap) {
         UUID playerId = player.getUniqueId();
+        int attempts = attemptsLeft.get(playerId) - 1;
+        attemptsLeft.put(playerId, attempts);
 
-        if (captchaManager.isPending(playerId)) {
-            if (blockChat) {
-                event.setCancelled(true);
+        if (attempts <= 0 || isTrap) {
+            player.kickPlayer(configManager.getCapchaKickMessage());
+            playSound(player, "on-kick");
+            cleanupPlayer(playerId);
+            databaseManager.savePlayerResult(playerId, false);
+        } else {
+            player.sendMessage(configManager.getCapchaFailMessage());
+            if (configManager.isTitlesEnabled()) {
+                player.sendTitle(
+                        configManager.getCapchaFailTitle(),
+                        configManager.getCapchaFailSubtitle(),
+                        configManager.getTitleFadeIn(),
+                        configManager.getTitleStay(),
+                        configManager.getTitleFadeOut()
+                );
             }
-
-            String message = event.getMessage();
-
-            Bukkit.getScheduler().runTask(plugin, () -> {
-                if (captchaManager.isPending(playerId)) {
-                    captchaManager.checkCapcha(player, message);
-                }
-            });
+            playSound(player, "on-fail");
         }
     }
 
-    @EventHandler
-    public void onPlayerQuit(PlayerQuitEvent event) {
-        handlePlayerDisconnect(event.getPlayer());
-    }
-
-    @EventHandler
-    public void onPlayerKick(PlayerKickEvent event) {
-        handlePlayerDisconnect(event.getPlayer());
-    }
-
-    private void handlePlayerDisconnect(Player player) {
+    private void setupTimeout(Player player) {
         UUID playerId = player.getUniqueId();
 
-        player.getActivePotionEffects().forEach(effect ->
-                player.removePotionEffect(effect.getType())
-        );
-        captchaManager.cleanupPlayer(playerId);
+        if (timeoutTasks.containsKey(playerId)) {
+            timeoutTasks.get(playerId).cancel();
+        }
+
+        int delay = configManager.getDelaySeconds() * 20;
+        BukkitTask task = Bukkit.getScheduler().runTaskLater(plugin, () -> {
+            if (pendingPlayers.containsKey(playerId)) {
+                player.kickPlayer(configManager.getCapchaKickMessage());
+                cleanupPlayer(playerId);
+                databaseManager.savePlayerResult(playerId, false);
+            }
+        }, delay);
+
+        timeoutTasks.put(playerId, task);
+    }
+
+    public void cleanupPlayer(UUID playerId) {
+        pendingPlayers.remove(playerId);
+        attemptsLeft.remove(playerId);
+        playerColors.remove(playerId);
+        playerUnicodes.remove(playerId);
+        captchaStartTimes.remove(playerId);
+
+        BukkitTask timeoutTask = timeoutTasks.remove(playerId);
+        if (timeoutTask != null) timeoutTask.cancel();
+
+        BukkitTask reminderTask = reminderTasks.remove(playerId);
+        if (reminderTask != null) reminderTask.cancel();
+    }
+
+    public void cleanupAllPlayers() {
+        new HashSet<>(pendingPlayers.keySet()).forEach(playerId -> {
+            Player player = Bukkit.getPlayer(playerId);
+            if (player != null) {
+                player.getActivePotionEffects().forEach(effect ->
+                        player.removePotionEffect(effect.getType()));
+            }
+            cleanupPlayer(playerId);
+        });
+    }
+
+    public boolean isPending(UUID playerId) {
+        return pendingPlayers.containsKey(playerId);
+    }
+
+    private void playSound(Player player, String soundName) {
+        ConfigManager.SoundConfig soundConfig = configManager.getSoundConfig(soundName);
+        if (soundConfig != null) {
+            player.playSound(
+                    player.getLocation(),
+                    soundConfig.sound,
+                    soundConfig.volume,
+                    soundConfig.pitch
+            );
+        }
+    }
+
+    public ConfigManager getConfig() {
+        return configManager;
     }
 }
