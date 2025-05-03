@@ -122,9 +122,11 @@ public class CaptchaManager {
     }
 
     private void executeSuccessCommands(Player player) {
-        configManager.getSuccessCommands().forEach(command ->
-                Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command.replace("$player", player.getName()))
-        );
+        configManager.getSuccessCommands().stream()
+                .filter(command -> command != null && !command.trim().isEmpty())
+                .forEach(command ->
+                        Bukkit.dispatchCommand(Bukkit.getConsoleSender(), command.replace("$player", player.getName()))
+                );
     }
 
     private void applyPendingEffects(Player player) {
