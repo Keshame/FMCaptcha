@@ -1,0 +1,143 @@
+#   capcha-prompt - сообщение при начале капчи (можно использовать $unicode, $color, $capcha).
+#   capcha-subtitle - подзаголовок на титле при начале капчи.
+#   capcha-title - заголовок на титле при начале капчи.
+#   capcha-success - сообщение об успешном прохождении.
+#   capcha-success-subtitle - подзаголовок при успехе.
+#   capcha-success-title - заголовок при успехе.
+#   capcha-fail - сообщение при неправильном вводе.
+#   capcha-fail-subtitle - подзаголовок при провале.
+#   capcha-fail-title - заголовок при провале.
+#   capcha-kick - сообщение при кике.
+#   capcha-reminder - повторное напоминание в чате.
+
+
+#   reminder-interval - интервал повторного напоминания (в секундах).
+#   attempts - количество попыток до кика.
+#   kick-on-fail - кикать ли игрока после исчерпания попыток.
+#   delay-seconds - задержка перед началом капчи.
+#   recheck-after-seconds - повторная проверка (в секундах).
+#   success-commands - команды которые будут выполняться после прохождения капчи
+
+
+#   apply-while-pending - накладывать ли эффекты во время ожидания капчи.
+#   list - список эффектов: тип, уровень, длительность, ambient, частицы.
+
+#   on-reminder, on-start, on-success, on-fail, on-kick - звук, громкость, высота тона.
+
+#   colors - список цветов для рандомизации капчи (HEX через '&x').
+#   unicodes - список символов-декораций для капчи.
+
+#   enabled - включены ли титлы.
+#   fade-in, stay, fade-out - параметры анимации титлов.
+
+#   freeze-movement - замораживать ли движение.
+#   block-commands - блокировать ли команды.
+#   block-chat - блокировать ли чат.
+
+# capcha:
+#   тут есть подвох, слево показывается слово ловушка, а справа слово,
+#   которое должен ввести игрок, чтобы его пропустило, это некий анти парсер.
+
+# попробовать капчу можно на FunMine.su
+
+messages:
+  capcha-prompt: '&c !  &fНaпишитe в чaт &7словo$unicode $color$capcha&f, чтoбы прoйти кaпчy'
+  capcha-subtitle: '&7Впишите слово из чата'
+  capcha-title: '&6Проверка на бота'
+
+  capcha-success: '&a !  &fВы &aуспешно &fпрошли проверку!'
+  capcha-success-subtitle: '&aВы прошли проверку!'
+  capcha-success-title: '&aУспешно'
+
+  capcha-fail: '&c !  Неверный ввод. &fПопробуйте ещё раз.'
+  capcha-fail-subtitle: '&cНе Угадал!'
+  capcha-fail-title: '&4Неверное слово!'
+
+  capcha-kick: '&cВы не прошли проверку на бота.'
+
+  capcha-reminder: '&c !  &fНaпишитe в чaт &7словo$unicode $color$capcha&f, чтoбы прoйти кaпчy'
+
+settings:
+  reminder-interval: 3
+  attempts: 3
+  kick-on-fail: true
+  delay-seconds: 30
+  recheck-after-seconds: 259200
+  success-commands:
+    - 'fmhub compass $player'
+
+effects:
+  apply-while-pending: true
+  list:
+    - type: BLINDNESS
+      amplifier: 0
+      duration: 999999
+      ambient: true
+      particles: false
+
+sounds:
+  on-reminder:
+    sound: 'block.note_block.bell'
+    volume: 0.5
+    pitch: 0.7
+
+  on-start:
+    sound: 'entity.illusioner.prepare_mirror'
+    volume: 0.8
+    pitch: 0.7
+
+  on-success:
+    sound: 'entity.ender_eye.death'
+    volume: 0.7
+    pitch: 0.5
+
+  on-fail:
+    sound: 'entity.evoker.prepare_attack'
+    volume: 0.6
+    pitch: 0.7
+
+  on-kick:
+    sound: 'ambient.cave'
+    volume: 0.7
+    pitch: 0.7
+
+colors:
+  - '&x&9&2&F&F&3&5'
+  - '&x&F&F&0&0&0&0'
+  - '&x&8&A&3&B&F&F'
+  - '&x&3&B&F&F&3&C'
+  - '&x&E&6&F&F&1&A'
+  - '&x&7&A&E&C&1&7'
+  - '&x&F&F&9&6&1&A'
+  - '&x&F&F&8&A&0&0'
+
+unicodes:
+  - ' -'
+  - ':'
+  - ' ▻'
+  - ' ─'
+  - ' ❘'
+  - ' |'
+  - ':'
+  - ' '
+
+titles:
+  enabled: true
+  fade-in: 10
+  stay: 40
+  fade-out: 10
+
+restrictions:
+  freeze-movement: true
+  block-commands: true
+  block-chat: true
+
+capcha:
+  'пpивeт': 'привет'
+  'тигp': 'тигр'
+  'нypик': 'нурик'
+  'лeмoн': 'лемон'
+  'capчa': 'сарча'
+  'бoт': 'бот'
+  'кopoвa': 'корова'
+  'пaндa': 'панда'

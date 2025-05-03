@@ -1,0 +1,6 @@
+name: FMCaptcha
+version: '1.0-FMSNAPSHOT'
+main: org.FunMine.FMCaptcha.Main
+api-version: '1.13'
+author: KapUstenca
+website: funmine.su
