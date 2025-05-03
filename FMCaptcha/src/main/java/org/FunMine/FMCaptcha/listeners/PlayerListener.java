@@ -1,6 +1,7 @@
 package org.FunMine.FMCaptcha.listeners;
 
 import org.FunMine.FMCaptcha.manager.CaptchaManager;
+import org.FunMine.FMCaptcha.manager.ConfigManager;
 import org.bukkit.Bukkit;
 import org.bukkit.entity.Player;
 import org.bukkit.event.EventHandler;
@@ -13,11 +14,18 @@ import java.util.UUID;
 
 public class PlayerListener implements Listener {
     private final JavaPlugin plugin;
-    private final CaptchaManager capchaManager;
+    private final CaptchaManager captchaManager;
+    private final boolean freezeMovement;
+    private final boolean blockCommands;
+    private final boolean blockChat;
 
-    public PlayerListener(JavaPlugin plugin, CaptchaManager capchaManager) {
+    public PlayerListener(JavaPlugin plugin, CaptchaManager captchaManager) {
         this.plugin = plugin;
-        this.capchaManager = capchaManager;
+        this.captchaManager = captchaManager;
+        ConfigManager config = captchaManager.getConfig();
+        this.freezeMovement = config.isFreezeMovement();
+        this.blockCommands = config.isBlockCommands();
+        this.blockChat = config.isBlockChat();
     }
 
     @EventHandler
@@ -25,18 +33,19 @@ public class PlayerListener implements Listener {
         Player player = event.getPlayer();
         Bukkit.getScheduler().runTaskLater(plugin, () -> {
             if (player.isOnline()) {
-                capchaManager.startCapchaCheck(player);
+                captchaManager.startCapchaCheck(player);
             }
         }, 10L);
     }
 
     @EventHandler
     public void onPlayerMove(PlayerMoveEvent event) {
+        if (!freezeMovement) return;
+
         Player player = event.getPlayer();
         UUID playerId = player.getUniqueId();
 
-        if (capchaManager.isPending(playerId) &&
-                capchaManager.getConfig().isFreezeMovement() &&
+        if (captchaManager.isPending(playerId) &&
                 (event.getFrom().getX() != event.getTo().getX() ||
                         event.getFrom().getZ() != event.getTo().getZ())) {
             event.setTo(event.getFrom());
@@ -45,8 +54,10 @@ public class PlayerListener implements Listener {
 
     @EventHandler(priority = EventPriority.LOW)
     public void onPlayerCommand(PlayerCommandPreprocessEvent event) {
+        if (!blockCommands) return;
+
         Player player = event.getPlayer();
-        if (capchaManager.isPending(player.getUniqueId())) {
+        if (captchaManager.isPending(player.getUniqueId())) {
             event.setCancelled(true);
         }
     }
@@ -56,13 +67,16 @@ public class PlayerListener implements Listener {
         Player player = event.getPlayer();
         UUID playerId = player.getUniqueId();
 
-        if (capchaManager.isPending(playerId)) {
-            event.setCancelled(true);
+        if (captchaManager.isPending(playerId)) {
+            if (blockChat) {
+                event.setCancelled(true);
+            }
+
             String message = event.getMessage();
 
             Bukkit.getScheduler().runTask(plugin, () -> {
-                if (capchaManager.isPending(playerId)) {
-                    capchaManager.checkCapcha(player, message);
+                if (captchaManager.isPending(playerId)) {
+                    captchaManager.checkCapcha(player, message);
                 }
             });
         }
@@ -84,6 +98,6 @@ public class PlayerListener implements Listener {
         player.getActivePotionEffects().forEach(effect ->
                 player.removePotionEffect(effect.getType())
         );
-        capchaManager.cleanupPlayer(playerId);
+        captchaManager.cleanupPlayer(playerId);
     }
 }
