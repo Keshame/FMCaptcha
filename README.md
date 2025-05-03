@@ -1,7 +1,4 @@
 # FMCaptcha
 
-A lightweight and effective anti-bot captcha plugin for Minecraft servers.
-
-Simple to use  
-Highly configurable  
-Still **not bypassed** by known bots
+This plugin was a fun experiment, but it's no longer effective against modern bots.
+Development and updates have been discontinued.
